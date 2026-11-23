@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "updated_at": "2026-11-23",
+  "upstream": "QNIX-Dev/eligibility-antigravity-patcher",
+  "rules": [
+    {
+      "id": "cli-eligibility-x64",
+      "target": "cli",
+      "type": "pe_hex",
+      "arch": "x64",
+      "enabled": true,
+      "desc": "CLI eligibility screen off (x64)",
+      "find": "48 85 C9 0F 84 ?? ?? ?? ?? 80 79 08 00 0F 85 ?? ?? ?? ?? 48 89 C8 90 E8 ?? ?? ?? ?? 48 89 84 24 E0 00 00 00 48 89 9C 24 E8 00 00 00 48 89 8C 24 F0 00 00 00",
+      "replace": "48 85 C9 0F 84 ?? ?? ?? ?? 48 85 C9 90 0F 85 ?? ?? ?? ?? 48 89 C8 90 E8 ?? ?? ?? ?? 48 89 84 24 E0 00 00 00 48 89 9C 24 E8 00 00 00 48 89 8C 24 F0 00 00 00"
+    },
+    {
+      "id": "manager-eligibility-x64",
+      "target": "manager",
+      "type": "pe_hex",
+      "arch": "x64",
+      "enabled": true,
+      "desc": "Manager language_server hasValidAuth=true (x64)",
+      "find": "80 78 08 00 74 ?? 48 8B 54 24 70 48 89 50 60",
+      "replace": "C6 40 08 01 90 90 48 8B 54 24 70 48 89 50 60"
+    },
+    {
+      "id": "extension-hub-x64",
+      "target": "extension",
+      "type": "pe_hex",
+      "arch": "x64",
+      "enabled": true,
+      "desc": "Extension agy --hub hasValidAuth=true (x64)",
+      "find": "80 78 08 00 74 ?? 48 8B 54 24 70 48 89 50 60",
+      "replace": "C6 40 08 01 90 90 48 8B 54 24 70 48 89 50 60"
+    },
+    {
+      "id": "ide-eligibility-js",
+      "target": "ide",
+      "type": "js_regex",
+      "arch": "any",
+      "enabled": true,
+      "desc": "IDE main.js isGoogleInternal=true",
+      "find": "(resetIsTierGCPTos\\(\\),)this\\.[A-Za-z_$0-9]+\\.isGoogleInternal",
+      "replace": "${1}true",
+      "done_literal": "resetIsTierGCPTos(),true"
+    }
+  ]
+}
