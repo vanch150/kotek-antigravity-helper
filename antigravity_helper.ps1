@@ -1,12 +1,13 @@
 ﻿#Requires -Version 5.1
 param(
-    [ValidateSet('menu', 'status', 'patch', 'restore')]
+    [ValidateSet('menu', 'status', 'patch', 'restore', 'close')]
     [string]$Action = 'menu',
     [ValidateSet('all', 'ide', 'cli', 'manager', 'extension')]
     [string]$Target = 'all',
     [string]$SignaturesPath = '',
     [string]$SignaturesUrl = 'https://raw.githubusercontent.com/vanch150/kotek-antigravity-helper/main/signatures.json',
     [switch]$Offline,
+    [switch]$ForceClose,
     [string]$CustomPath = ''
 )
 
@@ -278,6 +279,75 @@ function Test-AntigravityProcessesRunning {
     return $found.ToArray()
 }
 
+function Stop-AntigravityProcesses {
+    $softProcs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like 'Antigravity*' })
+    foreach ($p in $softProcs) {
+        try {
+            if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
+                [void]$p.CloseMainWindow()
+            }
+        } catch {}
+    }
+    if ($softProcs.Count -gt 0) {
+        for ($w = 0; $w -lt 15; $w++) {
+            $stillAg = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like 'Antigravity*' })
+            if ($stillAg.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    $patterns = @('Antigravity*', 'agy', 'language_server*')
+    foreach ($p in (Get-Process -ErrorAction SilentlyContinue)) {
+        foreach ($pat in $patterns) {
+            if ($p.ProcessName -like $pat) {
+                try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+                break
+            }
+        }
+    }
+    Start-Sleep -Milliseconds 250
+    $left = @(Test-AntigravityProcessesRunning)
+    if ($left.Count -eq 0) {
+        Write-Ok "Все процессы Antigravity закрыты."
+        return $true
+    }
+    Write-Warn "Не удалось закрыть некоторые процессы: $($left -join ', ')"
+    return $false
+}
+
+function Find-AntigravityLauncherExe {
+    $roots = @(Get-AntigravitySearchRoots)
+    $exeNames = @('Antigravity.exe', 'Antigravity IDE.exe')
+    foreach ($r in $roots) {
+        foreach ($en in $exeNames) {
+            $p1 = Join-Path $r $en
+            if (Test-Path -LiteralPath $p1 -PathType Leaf) { return [System.IO.Path]::GetFullPath($p1) }
+        }
+        foreach ($sub in (Get-ChildItem -LiteralPath $r -Directory -Filter '*Antigravity*' -ErrorAction SilentlyContinue)) {
+            foreach ($en in $exeNames) {
+                $p2 = Join-Path $sub.FullName $en
+                if (Test-Path -LiteralPath $p2 -PathType Leaf) { return [System.IO.Path]::GetFullPath($p2) }
+                $p3 = Join-Path $sub.FullName ("current\$en")
+                if (Test-Path -LiteralPath $p3 -PathType Leaf) { return [System.IO.Path]::GetFullPath($p3) }
+            }
+        }
+    }
+    foreach ($regRoot in @(
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )) {
+        foreach ($item in (Get-ItemProperty -Path $regRoot -ErrorAction SilentlyContinue)) {
+            if ($item.DisplayName -and ($item.DisplayName -match '(?i)Antigravity') -and $item.DisplayIcon) {
+                $ic = ([string]$item.DisplayIcon).Split(',')[0].Trim().Trim('"')
+                if ($ic -match '(?i)Antigravity.*\.exe$' -and (Test-Path -LiteralPath $ic -PathType Leaf)) {
+                    return [System.IO.Path]::GetFullPath($ic)
+                }
+            }
+        }
+    }
+    return ''
+}
+
 function Get-AntigravitySearchRoots {
     $roots = New-Object System.Collections.Generic.List[string]
     foreach ($cand in @(
@@ -424,6 +494,11 @@ function Load-SignatureRules([string]$Path) {
 }
 
 function Invoke-HelperAction([string]$Act, [string]$Tgt, [string]$Override) {
+    if ($Act -eq 'close') {
+        [void](Stop-AntigravityProcesses)
+        return
+    }
+
     $targets = @(Find-AntigravityTargets $Tgt $Override)
     if ($targets.Count -eq 0) {
         Write-Warn "Установленные компоненты Google Antigravity не найдены автоматически."
@@ -433,6 +508,11 @@ function Invoke-HelperAction([string]$Act, [string]$Tgt, [string]$Override) {
 
     if ($Act -in @('patch', 'restore')) {
         $running = @(Test-AntigravityProcessesRunning)
+        if ($running.Count -gt 0 -and $ForceClose) {
+            Write-Info "Закрываю запущенные процессы Antigravity перед операцией..."
+            [void](Stop-AntigravityProcesses)
+            $running = @(Test-AntigravityProcessesRunning)
+        }
         if ($running.Count -gt 0) {
             Write-Err "Закрой все процессы Antigravity перед операцией: $($running -join ', ')"
             return
@@ -494,26 +574,30 @@ function Invoke-HelperAction([string]$Act, [string]$Tgt, [string]$Override) {
     }
 }
 
-Sync-RemoteSignatures $SignaturesUrl $SignaturesPath
-
-if ($Action -eq 'menu') {
-    while ($true) {
-        Write-Host ""
-        Write-Host "=== Kotek Antigravity Helper (v0.2.0) ===" -ForegroundColor Cyan
-        Write-Host "1. Проверить статус установленных клиентов Antigravity"
-        Write-Host "2. Применить патч (с бэкапом *.agybak)"
-        Write-Host "3. Откатить всё из *.agybak"
-        Write-Host "0. Выход"
-        $choice = Read-Host "Выбери действие"
-        switch ($choice.Trim()) {
-            '1' { Invoke-HelperAction 'status'  $Target $CustomPath }
-            '2' { Invoke-HelperAction 'patch'   $Target $CustomPath }
-            '3' { Invoke-HelperAction 'restore' $Target $CustomPath }
-            '0' { break }
-            default { Write-Warn "Неизвестный пункт: $choice" }
-        }
-        if ($choice.Trim() -eq '0') { break }
+if ($MyInvocation.InvocationName -ne '.') {
+    if ($Action -ne 'close') {
+        Sync-RemoteSignatures $SignaturesUrl $SignaturesPath
     }
-} else {
-    Invoke-HelperAction $Action $Target $CustomPath
+
+    if ($Action -eq 'menu') {
+        while ($true) {
+            Write-Host ""
+            Write-Host "=== Kotek Antigravity Helper (v0.2.0) ===" -ForegroundColor Cyan
+            Write-Host "1. Проверить статус установленных клиентов Antigravity"
+            Write-Host "2. Применить патч (с бэкапом *.agybak)"
+            Write-Host "3. Откатить всё из *.agybak"
+            Write-Host "0. Выход"
+            $choice = Read-Host "Выбери действие"
+            switch ($choice.Trim()) {
+                '1' { Invoke-HelperAction 'status'  $Target $CustomPath }
+                '2' { Invoke-HelperAction 'patch'   $Target $CustomPath }
+                '3' { Invoke-HelperAction 'restore' $Target $CustomPath }
+                '0' { break }
+                default { Write-Warn "Неизвестный пункт: $choice" }
+            }
+            if ($choice.Trim() -eq '0') { break }
+        }
+    } else {
+        Invoke-HelperAction $Action $Target $CustomPath
+    }
 }

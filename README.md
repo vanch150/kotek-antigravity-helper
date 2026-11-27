@@ -25,7 +25,14 @@
 * Полный откат к оригинальным файлам — одной кнопкой **«Откатить (.agybak)»** на Шаге 3.
 * Актуальные `signatures.json` подтягиваются автоматически с GitHub при каждом запуске.
 
+## Новое в v0.3.0
+
+* `-Action close` — мягко закрывает окна `Antigravity*` и завершает процессы `Antigravity*`, `agy`, `language_server*`.
+* `-ForceClose` — принудительно закрывает запущенные процессы Antigravity перед `-Action patch` или `-Action restore`.
+* `-Action status -Offline` — быстрая проверка статуса без сетевого запроса к `signatures.json`.
+* `Find-AntigravityLauncherExe` — автопоиск исполняемого файла лаунчера (`Antigravity.exe` / `Antigravity IDE.exe`) по стандартным папкам и реестру Windows.
+
 ## Инструменты автора (`dev/`)
 
 * `dev\SYNC_SIGNATURES.bat` — в 1 клик синхронизирует свежие Windows x64/JS-сигнатуры из [QNIX-Dev/eligibility-antigravity-patcher](https://github.com/QNIX-Dev/eligibility-antigravity-patcher) в `signatures.json` и предлагает запушить в GitHub.
-* `dev\BUILD_RELEASE.bat` — собирает чистый `kotek-antigravity-helper-v0.2.0.zip` (без `dev/` и `.git/`) для публикации в GitHub Releases.
+* `dev\BUILD_RELEASE.bat` — собирает чистый `kotek-antigravity-helper-v0.3.0.zip` (без `dev/` и `.git/`) для публикации в GitHub Releases.
